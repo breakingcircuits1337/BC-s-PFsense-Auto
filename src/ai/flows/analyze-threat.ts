@@ -1,4 +1,4 @@
-// use server'
+'use server';
 
 /**
  * @fileOverview Analyzes potential security threats using AI.
