@@ -1,10 +1,10 @@
 
 "use client";
 import type { FC } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Bell, Wifi, ShieldCheck, AlertTriangle, Volume2, VolumeX, BarChart3, ListChecks, Info, XCircle } from "lucide-react";
+import { Bell, Wifi, ShieldCheck, AlertTriangle, Volume2, VolumeX, BarChart3, ListChecks, Info, XCircle, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -33,15 +33,17 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  Tooltip as RechartsTooltip, // Renamed to avoid conflict if we use ShadCN Tooltip
 } from "recharts";
 import {
   ChartContainer,
-  ChartTooltip,
+  ChartTooltip, // This is ShadCN's wrapper for RechartsTooltip
   ChartTooltipContent,
   ChartLegend,
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { getPfSenseInterfaceStats, type InterfaceStatsData } from '@/app/actions/pfsense'; // Import the new action
 
 interface Alert {
   id: string;
@@ -74,27 +76,22 @@ const severityIconMap: Record<Alert["severity"], JSX.Element> = {
   Low: <Info className="h-4 w-4 text-foreground" />,
 };
 
-const mockTrafficData = [
-  { time: '10:00', upload: 400000, download: 240000 },
-  { time: '10:05', upload: 300000, download: 139800 },
-  { time: '10:10', upload: 200000, download: 980000 },
-  { time: '10:15', upload: 278000, download: 390800 },
-  { time: '10:20', upload: 189000, download: 480000 },
-  { time: '10:25', upload: 239000, download: 380000 },
-  { time: '10:30', upload: 349000, download: 430000 },
-];
+type TrafficDataPoint = { time: string; upload: number; download: number };
 
 const chartConfig = {
   upload: {
-    label: "Upload",
+    label: "Upload (KB/s)",
     color: "hsl(var(--chart-1))",
   },
   download: {
-    label: "Download",
+    label: "Download (KB/s)",
     color: "hsl(var(--chart-2))",
   },
 } satisfies ChartConfig;
 
+const MAX_TRAFFIC_POINTS = 30; // Display last N data points
+const INTERFACE_TO_MONITOR = 'wan'; // TODO: Make this configurable, e.g., from settings
+const TRAFFIC_FETCH_INTERVAL = 10000; // Fetch every 10 seconds
 
 export const DashboardPage: FC = () => {
   const [verbalNotifications, setVerbalNotifications] = useState(false);
@@ -103,13 +100,69 @@ export const DashboardPage: FC = () => {
   const [detailedAlert, setDetailedAlert] = useState<Alert | null>(null);
   const [displayedAlerts, setDisplayedAlerts] = useState<Alert[]>(initialMockAlerts);
 
+  const [trafficData, setTrafficData] = useState<TrafficDataPoint[]>([]);
+  const [isLoadingTraffic, setIsLoadingTraffic] = useState(true); // Start true for initial load
+  const [trafficError, setTrafficError] = useState<string | null>(null);
+  const previousStatsRef = useRef<{ timestamp: number; inbytes: number; outbytes: number } | null>(null);
+
   useEffect(() => {
     setActiveThreats(displayedAlerts.filter(a => a.severity === "Critical" || a.severity === "High").length);
   }, [displayedAlerts]);
 
+  useEffect(() => {
+    const fetchTraffic = async () => {
+      if (!isLoadingTraffic) setIsLoadingTraffic(true); // Show loader for subsequent fetches too
+      // setTrafficError(null); // Clear previous error before new fetch attempt
+
+      try {
+        const result = await getPfSenseInterfaceStats(INTERFACE_TO_MONITOR);
+        if (result.success && result.data) {
+          setTrafficError(null); // Clear error on success
+          const currentTime = new Date();
+          const currentTimestamp = currentTime.getTime();
+          const { inbytes, outbytes } = result.data;
+
+          if (previousStatsRef.current) {
+            const prev = previousStatsRef.current;
+            const timeDiffSeconds = (currentTimestamp - prev.timestamp) / 1000;
+
+            if (timeDiffSeconds > 0) {
+              const downloadRateBytes = (inbytes - prev.inbytes) / timeDiffSeconds;
+              const uploadRateBytes = (outbytes - prev.outbytes) / timeDiffSeconds;
+
+              setTrafficData(prevData => {
+                const newDataPoint = {
+                  time: currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                  download: Math.max(0, downloadRateBytes / 1024), // KBps
+                  upload: Math.max(0, uploadRateBytes / 1024),     // KBps
+                };
+                const updatedData = [...prevData, newDataPoint];
+                return updatedData.slice(-MAX_TRAFFIC_POINTS);
+              });
+            }
+          }
+          previousStatsRef.current = { timestamp: currentTimestamp, inbytes, outbytes };
+        } else {
+          console.warn("Failed to fetch or parse traffic data:", result.error);
+          setTrafficError(result.error || `Failed to fetch traffic data for ${INTERFACE_TO_MONITOR}. Ensure pfSense API is configured and the endpoint is correct.`);
+          // Not clearing data on error so user can see last known good state
+        }
+      } catch (error) {
+        console.error("Error in fetchTraffic:", error);
+        setTrafficError(error instanceof Error ? error.message : "Unknown error fetching traffic data.");
+      } finally {
+        setIsLoadingTraffic(false);
+      }
+    };
+
+    fetchTraffic(); // Initial fetch
+    const intervalId = setInterval(fetchTraffic, TRAFFIC_FETCH_INTERVAL);
+    return () => clearInterval(intervalId);
+  }, []);
+
+
   const handleVerbalNotificationToggle = (checked: boolean) => {
     setVerbalNotifications(checked);
-    // In a real app, you might initialize or stop a TTS service here
     console.log(`Verbal notifications ${checked ? "enabled" : "disabled"}`);
   };
   
@@ -193,36 +246,62 @@ export const DashboardPage: FC = () => {
         <Card className="shadow-lg lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><BarChart3 className="h-6 w-6 text-primary" />Network Traffic Overview</CardTitle>
-            <CardDescription>Summary of network activity.</CardDescription>
+            <CardDescription>Summary of network activity for '{INTERFACE_TO_MONITOR}' interface.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px] p-0">
+          <CardContent className="h-[300px] p-0 relative">
+             {isLoadingTraffic && trafficData.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/70 z-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="ml-2 text-muted-foreground">Loading traffic data...</span>
+                </div>
+            )}
+            {trafficError && !isLoadingTraffic && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/70 z-10 p-4 text-center">
+                    <AlertTriangle className="h-8 w-8 text-destructive mb-2"/>
+                    <p className="text-destructive text-sm font-semibold">Error loading traffic data:</p>
+                    <p className="text-destructive/80 text-xs">{trafficError}</p>
+                </div>
+            )}
+            {!isLoadingTraffic && !trafficError && trafficData.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/70 z-10">
+                    <p className="text-muted-foreground">No traffic data available. Waiting for first data points...</p>
+                </div>
+            )}
             <ChartContainer config={chartConfig} className="h-full w-full">
-              <AreaChart data={mockTrafficData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <AreaChart data={trafficData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="time"
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
+                  fontSize={12}
                 />
                 <YAxis
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
-                  tickFormatter={(value) => {
-                    const numValue = Number(value);
-                    const kb = numValue / 1024;
-                    if (kb < 1) return `${numValue} B`;
-                    if (kb < 1024) return `${kb.toFixed(0)} KB`;
-                    const mb = kb / 1024;
-                    if (mb < 1024) return `${mb.toFixed(1)} MB`;
-                    const gb = mb / 1024;
-                    return `${gb.toFixed(1)} GB`;
+                  fontSize={12}
+                  tickFormatter={(value) => { // value is in KBps
+                    if (value === 0) return "0";
+                    if (value < 1) return `${(value * 1024).toFixed(0)} B/s`;
+                    if (value < 1024) return `${value.toFixed(1)} KB/s`;
+                    const mbps = value / 1024;
+                    return `${mbps.toFixed(1)} MB/s`;
                   }}
                 />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent indicator="dot" />}
+                <RechartsTooltip 
+                  content={<ChartTooltipContent 
+                    indicator="dot" 
+                    formatter={(value, name) => {
+                      let formattedValue = "";
+                      const numValue = Number(value);
+                      if (numValue < 1 && numValue > 0) formattedValue = `${(numValue * 1024).toFixed(0)} B/s`;
+                      else if (numValue < 1024) formattedValue = `${numValue.toFixed(1)} KB/s`;
+                      else formattedValue = `${(numValue / 1024).toFixed(1)} MB/s`;
+                      return [formattedValue, chartConfig[name as keyof typeof chartConfig]?.label || name];
+                    }}
+                  />} 
                 />
                 <ChartLegend content={<ChartLegendContent />} />
                 <Area
@@ -232,6 +311,7 @@ export const DashboardPage: FC = () => {
                   fillOpacity={0.3}
                   stroke="var(--color-upload)"
                   stackId="1"
+                  isAnimationActive={false}
                 />
                 <Area
                   dataKey="download"
@@ -240,6 +320,7 @@ export const DashboardPage: FC = () => {
                   fillOpacity={0.3}
                   stroke="var(--color-download)"
                   stackId="1"
+                  isAnimationActive={false}
                 />
               </AreaChart>
             </ChartContainer>
@@ -323,3 +404,4 @@ export const DashboardPage: FC = () => {
     </div>
   );
 };
+
