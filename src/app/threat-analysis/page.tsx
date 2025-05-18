@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, type FormEvent } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, ShieldAlert, Lightbulb, CheckCircle, Info } from 'lucide-react';
+import { Loader2, ShieldAlert, Lightbulb, CheckCircle, Info, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
 import type { AnalyzeThreatInput, AnalyzeThreatOutput } from '@/ai/flows/analyze-threat';
 import { analyzeThreat } from '@/ai/flows/analyze-threat'; // Ensure this path is correct
 
