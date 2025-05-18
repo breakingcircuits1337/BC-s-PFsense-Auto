@@ -1,7 +1,7 @@
 
 "use client";
 import type { FC } from 'react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Bell, Wifi, ShieldCheck, AlertTriangle, Volume2, VolumeX, BarChart3, ListChecks, Info, XCircle, Loader2 } from "lucide-react";
@@ -33,33 +33,39 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip as RechartsTooltip, // Renamed to avoid conflict if we use ShadCN Tooltip
+  Tooltip as RechartsTooltip,
 } from "recharts";
 import {
   ChartContainer,
-  ChartTooltip, // This is ShadCN's wrapper for RechartsTooltip
   ChartTooltipContent,
   ChartLegend,
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { getPfSenseInterfaceStats, type InterfaceStatsData } from '@/app/actions/pfsense'; // Import the new action
+import { getPfSenseInterfaceStats, type InterfaceStatsData } from '@/app/actions/pfsense';
 
 interface Alert {
   id: string;
   title: string;
   description: string;
   severity: "Critical" | "High" | "Medium" | "Low";
-  timestamp: string;
+  timestamp: string; // ISO string
   sourceIp?: string;
   destinationIp?: string;
 }
 
+// Use static ISO strings for timestamps to avoid hydration mismatch
+const now = Date.now();
+const fiveMinutesAgo = new Date(now - 1000 * 60 * 5).toISOString();
+const thirtyMinutesAgo = new Date(now - 1000 * 60 * 30).toISOString();
+const twoHoursAgo = new Date(now - 1000 * 60 * 60 * 2).toISOString();
+const twentyFourHoursAgo = new Date(now - 1000 * 60 * 60 * 24).toISOString();
+
 const initialMockAlerts: Alert[] = [
-  { id: "1", title: "Potential DDoS Attack", description: "Unusual traffic spike detected from multiple IPs.", severity: "Critical", timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(), sourceIp: "Multiple", destinationIp: "192.168.1.100" },
-  { id: "2", title: "Malware Signature Detected", description: "Known malware signature matched on host 192.168.1.15.", severity: "High", timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), sourceIp: "192.168.1.15", destinationIp: "N/A" },
-  { id: "3", title: "Unauthorized Access Attempt", description: "Failed login attempts on server 'WEB-SRV-01'.", severity: "Medium", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), sourceIp: "103.22.10.5", destinationIp: "192.168.1.50" },
-  { id: "4", title: "Outdated Software Vulnerability", description: "Host 192.168.1.22 running outdated Apache version.", severity: "Low", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), sourceIp: "192.168.1.22", destinationIp: "N/A" },
+  { id: "1", title: "Potential DDoS Attack", description: "Unusual traffic spike detected from multiple IPs.", severity: "Critical", timestamp: fiveMinutesAgo, sourceIp: "Multiple", destinationIp: "192.168.1.100" },
+  { id: "2", title: "Malware Signature Detected", description: "Known malware signature matched on host 192.168.1.15.", severity: "High", timestamp: thirtyMinutesAgo, sourceIp: "192.168.1.15", destinationIp: "N/A" },
+  { id: "3", title: "Unauthorized Access Attempt", description: "Failed login attempts on server 'WEB-SRV-01'.", severity: "Medium", timestamp: twoHoursAgo, sourceIp: "103.22.10.5", destinationIp: "192.168.1.50" },
+  { id: "4", title: "Outdated Software Vulnerability", description: "Host 192.168.1.22 running outdated Apache version.", severity: "Low", timestamp: twentyFourHoursAgo, sourceIp: "192.168.1.22", destinationIp: "N/A" },
 ];
 
 const severityVariantMap = {
@@ -89,38 +95,77 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const MAX_TRAFFIC_POINTS = 30; // Display last N data points
-const INTERFACE_TO_MONITOR = 'wan'; // TODO: Make this configurable, e.g., from settings
-const TRAFFIC_FETCH_INTERVAL = 10000; // Fetch every 10 seconds
+const MAX_TRAFFIC_POINTS = 30;
+const INTERFACE_TO_MONITOR = 'wan';
+const TRAFFIC_FETCH_INTERVAL = 10000;
+
+const timeSince = (dateString: string) => {
+  const date = new Date(dateString);
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+  let interval = seconds / 31536000;
+  if (interval > 1) return Math.floor(interval) + "y ago";
+  interval = seconds / 2592000;
+  if (interval > 1) return Math.floor(interval) + "mo ago";
+  interval = seconds / 86400;
+  if (interval > 1) return Math.floor(interval) + "d ago";
+  interval = seconds / 3600;
+  if (interval > 1) return Math.floor(interval) + "h ago";
+  interval = seconds / 60;
+  if (interval > 1) return Math.floor(interval) + "m ago";
+  return Math.max(0, Math.floor(seconds)) + "s ago"; // Ensure non-negative
+};
+
+const ClientTimeRenderer: FC<{ timestamp: string; formatter: (ts: string) => string | JSX.Element }> = ({ timestamp, formatter }) => {
+  const [renderedTime, setRenderedTime] = useState<string | JSX.Element | null>(null);
+
+  useEffect(() => {
+    setRenderedTime(formatter(timestamp));
+  }, [timestamp, formatter]);
+
+  // Render a placeholder or basic format until client-side rendering kicks in
+  return <>{renderedTime || new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>;
+};
+
 
 export const DashboardPage: FC = () => {
   const [verbalNotifications, setVerbalNotifications] = useState(false);
   const [systemHealth, setSystemHealth] = useState(0);
   const [activeThreats, setActiveThreats] = useState(0);
   const [detailedAlert, setDetailedAlert] = useState<Alert | null>(null);
-  const [displayedAlerts, setDisplayedAlerts] = useState<Alert[]>(initialMockAlerts);
+  const [displayedAlerts, setDisplayedAlerts] = useState<Alert[]>(() => 
+    initialMockAlerts.map(alert => ({...alert, timestamp: new Date(alert.timestamp).toISOString()}))
+  );
+
 
   const [trafficData, setTrafficData] = useState<TrafficDataPoint[]>([]);
-  const [isLoadingTraffic, setIsLoadingTraffic] = useState(true); // Start true for initial load
+  const [isLoadingTraffic, setIsLoadingTraffic] = useState(true);
   const [trafficError, setTrafficError] = useState<string | null>(null);
   const previousStatsRef = useRef<{ timestamp: number; inbytes: number; outbytes: number } | null>(null);
+  const [chartTimeStrings, setChartTimeStrings] = useState<string[]>([]);
+
 
   useEffect(() => {
     setActiveThreats(displayedAlerts.filter(a => a.severity === "Critical" || a.severity === "High").length);
   }, [displayedAlerts]);
 
-  useEffect(() => {
+ useEffect(() => {
     const fetchTraffic = async () => {
-      if (!isLoadingTraffic) setIsLoadingTraffic(true); // Show loader for subsequent fetches too
-      // setTrafficError(null); // Clear previous error before new fetch attempt
+      if (!isLoadingTraffic) setIsLoadingTraffic(true);
 
       try {
         const result = await getPfSenseInterfaceStats(INTERFACE_TO_MONITOR);
         if (result.success && result.data) {
-          setTrafficError(null); // Clear error on success
-          const currentTime = new Date();
-          const currentTimestamp = currentTime.getTime();
+          setTrafficError(null);
+          const currentServerTime = new Date(); // Use a single Date object for this fetch
+          const currentTimestamp = currentServerTime.getTime();
           const { inbytes, outbytes } = result.data;
+
+          let newTimeString = '';
+          // Defer toLocaleTimeString to client-side for chart label
+          if (typeof window !== 'undefined') {
+            newTimeString = currentServerTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          }
+
 
           if (previousStatsRef.current) {
             const prev = previousStatsRef.current;
@@ -129,12 +174,12 @@ export const DashboardPage: FC = () => {
             if (timeDiffSeconds > 0) {
               const downloadRateBytes = (inbytes - prev.inbytes) / timeDiffSeconds;
               const uploadRateBytes = (outbytes - prev.outbytes) / timeDiffSeconds;
-
+              
               setTrafficData(prevData => {
                 const newDataPoint = {
-                  time: currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                  download: Math.max(0, downloadRateBytes / 1024), // KBps
-                  upload: Math.max(0, uploadRateBytes / 1024),     // KBps
+                  time: newTimeString || prevData[prevData.length -1]?.time || '...', // use client-generated time string
+                  download: Math.max(0, downloadRateBytes / 1024),
+                  upload: Math.max(0, uploadRateBytes / 1024),
                 };
                 const updatedData = [...prevData, newDataPoint];
                 return updatedData.slice(-MAX_TRAFFIC_POINTS);
@@ -145,7 +190,6 @@ export const DashboardPage: FC = () => {
         } else {
           console.warn("Failed to fetch or parse traffic data:", result.error);
           setTrafficError(result.error || `Failed to fetch traffic data for ${INTERFACE_TO_MONITOR}. Ensure pfSense API is configured and the endpoint is correct.`);
-          // Not clearing data on error so user can see last known good state
         }
       } catch (error) {
         console.error("Error in fetchTraffic:", error);
@@ -155,33 +199,16 @@ export const DashboardPage: FC = () => {
       }
     };
 
-    fetchTraffic(); // Initial fetch
+    fetchTraffic();
     const intervalId = setInterval(fetchTraffic, TRAFFIC_FETCH_INTERVAL);
     return () => clearInterval(intervalId);
-  }, []);
-
+  }, [isLoadingTraffic]); // Removed isLoadingTraffic from dependencies to avoid loop with setIsLoadingTraffic(true)
 
   const handleVerbalNotificationToggle = (checked: boolean) => {
     setVerbalNotifications(checked);
     console.log(`Verbal notifications ${checked ? "enabled" : "disabled"}`);
   };
   
-  const timeSince = (dateString: string) => {
-    const date = new Date(dateString);
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + "y ago";
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + "mo ago";
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + "d ago";
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + "h ago";
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + "m ago";
-    return Math.floor(seconds) + "s ago";
-  };
-
   const handleDismissAlert = (alertId: string) => {
     setDisplayedAlerts(currentAlerts => currentAlerts.filter(alert => alert.id !== alertId));
     if (detailedAlert && detailedAlert.id === alertId) {
@@ -282,7 +309,7 @@ export const DashboardPage: FC = () => {
                   axisLine={false}
                   tickMargin={8}
                   fontSize={12}
-                  tickFormatter={(value) => { // value is in KBps
+                  tickFormatter={(value) => { 
                     if (value === 0) return "0";
                     if (value < 1) return `${(value * 1024).toFixed(0)} B/s`;
                     if (value < 1024) return `${value.toFixed(1)} KB/s`;
@@ -352,7 +379,9 @@ export const DashboardPage: FC = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium">{alert.title}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{timeSince(alert.timestamp)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                       <ClientTimeRenderer timestamp={alert.timestamp} formatter={timeSince} />
+                    </TableCell>
                     <TableCell className="text-right space-x-1">
                       <Button variant="ghost" size="sm" onClick={() => setDetailedAlert(alert)}>Details</Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDismissAlert(alert.id)} aria-label="Dismiss alert">
@@ -382,7 +411,7 @@ export const DashboardPage: FC = () => {
                 </Badge>
               </AlertDialogTitle>
               <AlertDialogDescription>
-                Logged: {new Date(detailedAlert.timestamp).toLocaleString()}
+                Logged: <ClientTimeRenderer timestamp={detailedAlert.timestamp} formatter={(ts) => new Date(ts).toLocaleString()} />
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-3 my-4 text-sm">
@@ -404,4 +433,3 @@ export const DashboardPage: FC = () => {
     </div>
   );
 };
-

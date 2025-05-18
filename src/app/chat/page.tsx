@@ -1,4 +1,6 @@
+
 "use client";
+import type { FC } from 'react'; // Added FC for ClientTimeRenderer type
 import { useState, useRef, useEffect, type FormEvent } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,14 +11,28 @@ import { Loader2, MessageCircle, Mic, Send, User, Volume2, VolumeX } from 'lucid
 import { useToast } from "@/hooks/use-toast";
 import type { InteractiveLLMChatInput, InteractiveLLMChatOutput } from '@/ai/flows/interactive-llm-chat';
 import { interactiveLLMChat } from '@/ai/flows/interactive-llm-chat';
-import { useSTT } from '@/hooks/use-stt'; // Assuming use-stt.ts is created
+import { useSTT } from '@/hooks/use-stt';
 
 interface Message {
   id: string;
   text: string;
   sender: 'user' | 'ai';
-  timestamp: Date;
+  timestamp: string; // Changed to ISO string
 }
+
+// Client-side renderer for timestamps to avoid hydration issues
+const ClientTimeRenderer: FC<{ timestamp: string; formatter: (ts: string) => string | JSX.Element }> = ({ timestamp, formatter }) => {
+  const [renderedTime, setRenderedTime] = useState<string | JSX.Element | null>(null);
+
+  useEffect(() => {
+    // Ensure this runs only on the client
+    setRenderedTime(formatter(timestamp));
+  }, [timestamp, formatter]);
+
+  // Render a placeholder or basic format until client-side rendering kicks in
+  return <>{renderedTime || new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }</>;
+};
+
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -64,8 +80,6 @@ export default function ChatPage() {
   const speak = (text: string) => {
     if (!isTTSEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
     const utterance = new SpeechSynthesisUtterance(text);
-    // Potentially configure voice, rate, pitch here if needed
-    // For ElevenLabs, this would be an API call
     window.speechSynthesis.speak(utterance);
   };
 
@@ -78,7 +92,7 @@ export default function ChatPage() {
       id: Date.now().toString(),
       text: currentInput,
       sender: 'user',
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(), // Use ISO string
     };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
@@ -92,7 +106,7 @@ export default function ChatPage() {
         id: (Date.now() + 1).toString(),
         text: result.response,
         sender: 'ai',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(), // Use ISO string
       };
       setMessages((prev) => [...prev, aiMessage]);
       speak(result.response);
@@ -109,7 +123,7 @@ export default function ChatPage() {
         id: (Date.now() + 1).toString(),
         text: `Sorry, I encountered an error: ${errorMessage}`,
         sender: 'ai',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(), // Use ISO string
       };
       setMessages((prev) => [...prev, aiErrorMessage]);
     } finally {
@@ -149,7 +163,10 @@ export default function ChatPage() {
                   <div className={`max-w-[70%] rounded-lg px-4 py-2 ${msg.sender === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                     <p className="text-sm">{msg.text}</p>
                     <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-primary-foreground/70 text-right' : 'text-muted-foreground/70 text-left'}`}>
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                       <ClientTimeRenderer 
+                          timestamp={msg.timestamp} 
+                          formatter={(ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
+                       />
                     </p>
                   </div>
                   {msg.sender === 'user' && (
