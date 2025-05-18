@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Settings as SettingsIcon, KeyRound, Server, ShieldCheck } from 'lucide-react';
+import { Settings as SettingsIcon, KeyRound, Server, ShieldCheck, Network } from 'lucide-react';
 
 interface ApiSettings {
   elevenLabsApiKey: string;
@@ -17,6 +17,7 @@ interface ApiSettings {
   ollamaEndpoint: string;
   pfsenseApiUrl: string;
   pfsenseApiKey: string;
+  lanIpToMonitor: string;
 }
 
 export default function SettingsPage() {
@@ -28,6 +29,7 @@ export default function SettingsPage() {
     ollamaEndpoint: 'http://127.0.0.1:11434',
     pfsenseApiUrl: '',
     pfsenseApiKey: '',
+    lanIpToMonitor: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -42,14 +44,14 @@ export default function SettingsPage() {
     setIsLoading(true);
     // For now, we'll just log the settings to the console.
     // In a real application, you would save these securely or use them to update environment variables.
-    console.log("API Settings Submitted (for reference, actual values used by tools come from .env):", settings);
+    console.log("Settings Submitted (for reference, actual values used by tools come from .env):", settings);
 
     // Simulate saving
     setTimeout(() => {
       setIsLoading(false);
       toast({
         title: "Settings Logged",
-        description: "API keys and endpoints have been logged for your reference. Ensure corresponding .env variables are set for tools to function.",
+        description: "API keys, endpoints, and monitored IP have been logged for your reference. Ensure corresponding .env variables are set for tools to function.",
       });
     }, 1000);
   };
@@ -60,16 +62,30 @@ export default function SettingsPage() {
         <SettingsIcon className="h-8 w-8 text-primary" /> API & Service Settings
       </h1>
       <p className="text-muted-foreground">
-        Manage your API keys and service endpoints here. Values entered are for reference. Ensure corresponding server environment variables are set for tools to function correctly.
+        Manage your API keys, service endpoints, and monitored IP here. Values entered are for reference. Ensure corresponding server environment variables are set for tools to function correctly.
       </p>
 
       <form onSubmit={handleSubmit}>
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>API Key Management</CardTitle>
-            <CardDescription>Enter the API keys for the services you want to use. These will be logged for reference.</CardDescription>
+            <CardTitle>Configuration</CardTitle>
+            <CardDescription>Enter API keys, service endpoints, and other configurations. These will be logged for reference.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="lanIpToMonitor" className="flex items-center gap-2"><Network className="h-4 w-4" />LAN IP Address to Monitor</Label>
+              <Input
+                id="lanIpToMonitor"
+                name="lanIpToMonitor"
+                type="text"
+                value={settings.lanIpToMonitor}
+                onChange={handleChange}
+                placeholder="e.g., 192.168.1.100"
+                disabled={isLoading}
+              />
+              <p className="text-xs text-muted-foreground">Specify a LAN IP address for monitoring functions.</p>
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="geminiApiKey" className="flex items-center gap-2"><KeyRound className="h-4 w-4" />Gemini API Key</Label>
               <Input
@@ -179,3 +195,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+
