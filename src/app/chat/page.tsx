@@ -147,7 +147,7 @@ export default function ChatPage() {
       
       <Card className="flex-1 flex flex-col shadow-lg overflow-hidden">
         <CardHeader>
-          <CardTitle>Chat with NetGuardian AI</CardTitle>
+          <CardTitle>Chat with PFsense</CardTitle>
           <CardDescription>Ask about network status, security posture, or potential improvements.</CardDescription>
         </CardHeader>
         <CardContent className="flex-1 overflow-hidden p-0">
