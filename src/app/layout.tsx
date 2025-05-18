@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'NetGuardian AI',
-  description: 'Advanced Network Security Management with AI',
+  title: 'BREAKING CIRCUITS PFsense Auto',
+  description: 'Advanced Network Security Management with pfSense and AI',
 };
 
 export default function RootLayout({
