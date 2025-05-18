@@ -4,7 +4,7 @@ import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bell, Wifi, ShieldCheck, AlertTriangle, Volume2, VolumeX, BarChart3, ListChecks } from "lucide-react";
+import { Bell, Wifi, ShieldCheck, AlertTriangle, Volume2, VolumeX, BarChart3, ListChecks, Info } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -56,19 +56,19 @@ const severityIconMap: Record<Alert["severity"], JSX.Element> = {
   Critical: <AlertTriangle className="h-4 w-4 text-destructive-foreground" />,
   High: <AlertTriangle className="h-4 w-4 text-destructive-foreground" />,
   Medium: <AlertTriangle className="h-4 w-4 text-secondary-foreground" />,
-  Low: <AlertTriangle className="h-4 w-4 text-foreground" />,
+  Low: <Info className="h-4 w-4 text-foreground" />, // Changed Low severity icon to Info
 };
 
 export const DashboardPage: FC = () => {
   const [verbalNotifications, setVerbalNotifications] = useState(false);
-  const [systemHealth, setSystemHealth] = useState(0);
+  const [systemHealth, setSystemHealth] = useState(0); // Initialized to 0
   const [activeThreats, setActiveThreats] = useState(0);
   const [detailedAlert, setDetailedAlert] = useState<Alert | null>(null);
 
   useEffect(() => {
-    // Simulate fetching data
-    setSystemHealth(92);
+    // Simulate fetching data or initial calculations
     setActiveThreats(mockAlerts.filter(a => a.severity === "Critical" || a.severity === "High").length);
+    // System health will remain 0 until a real data source is connected
   }, []);
 
   const handleVerbalNotificationToggle = (checked: boolean) => {
@@ -116,18 +116,18 @@ export const DashboardPage: FC = () => {
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Network Status</CardTitle>
-            <Wifi className="h-5 w-5 text-accent" />
+            <Wifi className="h-5 w-5 text-muted-foreground" /> {/* Icon color changed */}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">Online</div>
-            <p className="text-xs text-muted-foreground">All systems operational</p>
+            <div className="text-2xl font-bold text-foreground">Unknown</div>
+            <p className="text-xs text-muted-foreground">Configure API to see live status.</p>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">System Health</CardTitle>
-            <ShieldCheck className="h-5 w-5 text-accent" />
+            <ShieldCheck className="h-5 w-5 text-muted-foreground" /> {/* Icon color changed */}
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{systemHealth}%</div>
@@ -142,7 +142,7 @@ export const DashboardPage: FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">{activeThreats}</div>
-            <p className="text-xs text-muted-foreground">Require immediate attention</p>
+            <p className="text-xs text-muted-foreground">Based on available mock data</p>
           </CardContent>
         </Card>
       </div>
@@ -151,18 +151,17 @@ export const DashboardPage: FC = () => {
         <Card className="shadow-lg lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><BarChart3 className="h-6 w-6 text-primary" />Network Traffic Overview</CardTitle>
-            <CardDescription>Summary of network activity.</CardDescription>
+            <CardDescription>Summary of network activity (Placeholder).</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center">
              <Image src="https://placehold.co/600x300.png" alt="Network Traffic Chart Placeholder" width={600} height={300} className="rounded-md object-cover" data-ai-hint="network chart"/>
-             {/* Placeholder for actual chart */}
           </CardContent>
         </Card>
 
         <Card className="shadow-lg lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><ListChecks className="h-6 w-6 text-primary" />Recent Security Alerts</CardTitle>
-            <CardDescription>Latest security events and notifications.</CardDescription>
+            <CardDescription>Latest security events from mock data.</CardDescription>
           </CardHeader>
           <CardContent className="max-h-[300px] overflow-y-auto">
             <Table>
@@ -233,3 +232,5 @@ export const DashboardPage: FC = () => {
   );
 };
 
+
+    
