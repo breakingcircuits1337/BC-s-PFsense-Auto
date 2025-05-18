@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -15,7 +16,7 @@ const navItems = [
   { href: '/threat-analysis', label: 'Threat Analysis', icon: ShieldAlert },
   { href: '/chat', label: 'LLM Chat', icon: MessageCircle },
   { href: '/explain-ai', label: 'Explain AI', icon: BrainCircuit },
-  // { href: '/settings', label: 'Settings', icon: Settings }, // Example for future use
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function AppNavigation() {
