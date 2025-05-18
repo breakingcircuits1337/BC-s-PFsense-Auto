@@ -3,12 +3,11 @@
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Bell, Wifi, ShieldCheck, AlertTriangle, Volume2, VolumeX, BarChart3, ListChecks, Info, XCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import Image from 'next/image';
 import {
   Table,
   TableBody,
@@ -28,6 +27,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 interface Alert {
   id: string;
@@ -60,6 +74,28 @@ const severityIconMap: Record<Alert["severity"], JSX.Element> = {
   Low: <Info className="h-4 w-4 text-foreground" />,
 };
 
+const mockTrafficData = [
+  { time: '10:00', upload: 400000, download: 240000 },
+  { time: '10:05', upload: 300000, download: 139800 },
+  { time: '10:10', upload: 200000, download: 980000 },
+  { time: '10:15', upload: 278000, download: 390800 },
+  { time: '10:20', upload: 189000, download: 480000 },
+  { time: '10:25', upload: 239000, download: 380000 },
+  { time: '10:30', upload: 349000, download: 430000 },
+];
+
+const chartConfig = {
+  upload: {
+    label: "Upload",
+    color: "hsl(var(--chart-1))",
+  },
+  download: {
+    label: "Download",
+    color: "hsl(var(--chart-2))",
+  },
+} satisfies ChartConfig;
+
+
 export const DashboardPage: FC = () => {
   const [verbalNotifications, setVerbalNotifications] = useState(false);
   const [systemHealth, setSystemHealth] = useState(0);
@@ -73,6 +109,7 @@ export const DashboardPage: FC = () => {
 
   const handleVerbalNotificationToggle = (checked: boolean) => {
     setVerbalNotifications(checked);
+    // In a real app, you might initialize or stop a TTS service here
     console.log(`Verbal notifications ${checked ? "enabled" : "disabled"}`);
   };
   
@@ -95,7 +132,7 @@ export const DashboardPage: FC = () => {
   const handleDismissAlert = (alertId: string) => {
     setDisplayedAlerts(currentAlerts => currentAlerts.filter(alert => alert.id !== alertId));
     if (detailedAlert && detailedAlert.id === alertId) {
-      setDetailedAlert(null); // Close dialog if the dismissed alert was being viewed
+      setDetailedAlert(null); 
     }
   };
 
@@ -156,10 +193,56 @@ export const DashboardPage: FC = () => {
         <Card className="shadow-lg lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><BarChart3 className="h-6 w-6 text-primary" />Network Traffic Overview</CardTitle>
-            <CardDescription>Summary of network activity (Placeholder).</CardDescription>
+            <CardDescription>Summary of network activity.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px] flex items-center justify-center">
-             <Image src="https://placehold.co/600x300.png" alt="Network Traffic Chart Placeholder" width={600} height={300} className="rounded-md object-cover" data-ai-hint="network chart"/>
+          <CardContent className="h-[300px] p-0">
+            <ChartContainer config={chartConfig} className="h-full w-full">
+              <AreaChart data={mockTrafficData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="time"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={(value) => {
+                    const numValue = Number(value);
+                    const kb = numValue / 1024;
+                    if (kb < 1) return `${numValue} B`;
+                    if (kb < 1024) return `${kb.toFixed(0)} KB`;
+                    const mb = kb / 1024;
+                    if (mb < 1024) return `${mb.toFixed(1)} MB`;
+                    const gb = mb / 1024;
+                    return `${gb.toFixed(1)} GB`;
+                  }}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent indicator="dot" />}
+                />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Area
+                  dataKey="upload"
+                  type="natural"
+                  fill="var(--color-upload)"
+                  fillOpacity={0.3}
+                  stroke="var(--color-upload)"
+                  stackId="1"
+                />
+                <Area
+                  dataKey="download"
+                  type="natural"
+                  fill="var(--color-download)"
+                  fillOpacity={0.3}
+                  stroke="var(--color-download)"
+                  stackId="1"
+                />
+              </AreaChart>
+            </ChartContainer>
           </CardContent>
         </Card>
 
@@ -191,7 +274,7 @@ export const DashboardPage: FC = () => {
                     <TableCell className="text-xs text-muted-foreground">{timeSince(alert.timestamp)}</TableCell>
                     <TableCell className="text-right space-x-1">
                       <Button variant="ghost" size="sm" onClick={() => setDetailedAlert(alert)}>Details</Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDismissAlert(alert.id)} aria-label="Dismiss alert">
+                      <Button variant="ghost" size="icon" onClick={() => handleDismissAlert(alert.id)} aria-label="Dismiss alert">
                         <XCircle className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -232,7 +315,7 @@ export const DashboardPage: FC = () => {
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => setDetailedAlert(null)}>Close</AlertDialogCancel>
-              <AlertDialogAction onClick={() => handleDismissAlert(detailedAlert.id)} className={buttonVariants({variant: "destructive"})}>Dismiss Alert</AlertDialogAction>
+              <AlertDialogAction onClick={() => {handleDismissAlert(detailedAlert.id); setDetailedAlert(null);}} className={buttonVariants({variant: "destructive"})}>Dismiss Alert</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -240,6 +323,3 @@ export const DashboardPage: FC = () => {
     </div>
   );
 };
-    
-
-    
