@@ -1,3 +1,4 @@
+
 "use client";
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
@@ -7,7 +8,6 @@ import { Bell, Wifi, ShieldCheck, AlertTriangle, Volume2, VolumeX, BarChart3, Li
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import Image from 'next/image';
 import {
   Table,
@@ -18,6 +18,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Alert {
   id: string;
@@ -43,7 +52,7 @@ const severityVariantMap = {
   Low: "outline",
 } as const;
 
-const severityIconMap = {
+const severityIconMap: Record<Alert["severity"], JSX.Element> = {
   Critical: <AlertTriangle className="h-4 w-4 text-destructive-foreground" />,
   High: <AlertTriangle className="h-4 w-4 text-destructive-foreground" />,
   Medium: <AlertTriangle className="h-4 w-4 text-secondary-foreground" />,
@@ -54,6 +63,7 @@ export const DashboardPage: FC = () => {
   const [verbalNotifications, setVerbalNotifications] = useState(false);
   const [systemHealth, setSystemHealth] = useState(0);
   const [activeThreats, setActiveThreats] = useState(0);
+  const [detailedAlert, setDetailedAlert] = useState<Alert | null>(null);
 
   useEffect(() => {
     // Simulate fetching data
@@ -144,7 +154,7 @@ export const DashboardPage: FC = () => {
             <CardDescription>Summary of network activity.</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center">
-             <Image src="https://placehold.co/600x300.png" alt="Network Traffic Chart Placeholder" width={600} height={300} className="rounded-md object-cover" data-ai-hint="network chart" />
+             <Image src="https://placehold.co/600x300.png" alt="Network Traffic Chart Placeholder" width={600} height={300} className="rounded-md object-cover" data-ai-hint="network chart"/>
              {/* Placeholder for actual chart */}
           </CardContent>
         </Card>
@@ -176,7 +186,7 @@ export const DashboardPage: FC = () => {
                     <TableCell className="font-medium">{alert.title}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{timeSince(alert.timestamp)}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">Details</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setDetailedAlert(alert)}>Details</Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -189,6 +199,37 @@ export const DashboardPage: FC = () => {
         </Card>
       </div>
 
+      {detailedAlert && (
+        <AlertDialog open={!!detailedAlert} onOpenChange={(isOpen) => { if (!isOpen) setDetailedAlert(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center justify-between">
+                {detailedAlert.title}
+                <Badge variant={severityVariantMap[detailedAlert.severity]} className="gap-1 ml-2 px-2 py-1">
+                  {severityIconMap[detailedAlert.severity]}
+                  {detailedAlert.severity}
+                </Badge>
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Logged: {new Date(detailedAlert.timestamp).toLocaleString()}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3 my-4 text-sm">
+              <p><strong className="font-medium text-foreground/90">Description:</strong> {detailedAlert.description}</p>
+              {detailedAlert.sourceIp && detailedAlert.sourceIp !== "N/A" && (
+                <p><strong className="font-medium text-foreground/90">Source IP:</strong> {detailedAlert.sourceIp}</p>
+              )}
+              {detailedAlert.destinationIp && detailedAlert.destinationIp !== "N/A" && (
+                <p><strong className="font-medium text-foreground/90">Destination IP:</strong> {detailedAlert.destinationIp}</p>
+              )}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDetailedAlert(null)}>Close</AlertDialogCancel>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 };
+
