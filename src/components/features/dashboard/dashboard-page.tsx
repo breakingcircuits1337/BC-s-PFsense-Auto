@@ -1,4 +1,3 @@
-
 "use client";
 import type { FC } from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -49,23 +48,16 @@ interface Alert {
   title: string;
   description: string;
   severity: "Critical" | "High" | "Medium" | "Low";
-  timestamp: string; // ISO string
+  timestamp: string;
   sourceIp?: string;
   destinationIp?: string;
 }
 
-// Use static ISO strings for timestamps to avoid hydration mismatch
-const now = Date.now();
-const fiveMinutesAgo = new Date(now - 1000 * 60 * 5).toISOString();
-const thirtyMinutesAgo = new Date(now - 1000 * 60 * 30).toISOString();
-const twoHoursAgo = new Date(now - 1000 * 60 * 60 * 2).toISOString();
-const twentyFourHoursAgo = new Date(now - 1000 * 60 * 60 * 24).toISOString();
-
 const initialMockAlerts: Alert[] = [
-  { id: "1", title: "Potential DDoS Attack", description: "Unusual traffic spike detected from multiple IPs.", severity: "Critical", timestamp: fiveMinutesAgo, sourceIp: "Multiple", destinationIp: "192.168.1.100" },
-  { id: "2", title: "Malware Signature Detected", description: "Known malware signature matched on host 192.168.1.15.", severity: "High", timestamp: thirtyMinutesAgo, sourceIp: "192.168.1.15", destinationIp: "N/A" },
-  { id: "3", title: "Unauthorized Access Attempt", description: "Failed login attempts on server 'WEB-SRV-01'.", severity: "Medium", timestamp: twoHoursAgo, sourceIp: "103.22.10.5", destinationIp: "192.168.1.50" },
-  { id: "4", title: "Outdated Software Vulnerability", description: "Host 192.168.1.22 running outdated Apache version.", severity: "Low", timestamp: twentyFourHoursAgo, sourceIp: "192.168.1.22", destinationIp: "N/A" },
+  { id: "1", title: "Potential DDoS Attack", description: "Unusual traffic spike detected from multiple IPs.", severity: "Critical", timestamp: "2024-06-02T05:26:39.904Z", sourceIp: "Multiple", destinationIp: "192.168.1.100" },
+  { id: "2", title: "Malware Signature Detected", description: "Known malware signature matched on host 192.168.1.15.", severity: "High", timestamp: "2024-06-02T05:01:39.904Z", sourceIp: "192.168.1.15", destinationIp: "N/A" },
+  { id: "3", title: "Unauthorized Access Attempt", description: "Failed login attempts on server 'WEB-SRV-01'.", severity: "Medium", timestamp: "2024-06-02T03:31:39.904Z", sourceIp: "103.22.10.5", destinationIp: "192.168.1.50" },
+  { id: "4", title: "Outdated Software Vulnerability", description: "Host 192.168.1.22 running outdated Apache version.", severity: "Low", timestamp: "2024-06-01T05:31:39.904Z", sourceIp: "192.168.1.22", destinationIp: "N/A" },
 ];
 
 const severityVariantMap = {
@@ -112,7 +104,7 @@ const timeSince = (dateString: string) => {
   if (interval > 1) return Math.floor(interval) + "h ago";
   interval = seconds / 60;
   if (interval > 1) return Math.floor(interval) + "m ago";
-  return Math.max(0, Math.floor(seconds)) + "s ago"; // Ensure non-negative
+  return Math.max(0, Math.floor(seconds)) + "s ago";
 };
 
 const ClientTimeRenderer: FC<{ timestamp: string; formatter: (ts: string) => string | JSX.Element }> = ({ timestamp, formatter }) => {
@@ -122,33 +114,26 @@ const ClientTimeRenderer: FC<{ timestamp: string; formatter: (ts: string) => str
     setRenderedTime(formatter(timestamp));
   }, [timestamp, formatter]);
 
-  // Render a placeholder or basic format until client-side rendering kicks in
-  return <>{renderedTime || new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>;
+  return <>{renderedTime}</>;
 };
-
 
 export const DashboardPage: FC = () => {
   const [verbalNotifications, setVerbalNotifications] = useState(false);
   const [systemHealth, setSystemHealth] = useState(0);
   const [activeThreats, setActiveThreats] = useState(0);
   const [detailedAlert, setDetailedAlert] = useState<Alert | null>(null);
-  const [displayedAlerts, setDisplayedAlerts] = useState<Alert[]>(() => 
-    initialMockAlerts.map(alert => ({...alert, timestamp: new Date(alert.timestamp).toISOString()}))
-  );
-
+  const [displayedAlerts, setDisplayedAlerts] = useState<Alert[]>(() => initialMockAlerts);
 
   const [trafficData, setTrafficData] = useState<TrafficDataPoint[]>([]);
   const [isLoadingTraffic, setIsLoadingTraffic] = useState(true);
   const [trafficError, setTrafficError] = useState<string | null>(null);
   const previousStatsRef = useRef<{ timestamp: number; inbytes: number; outbytes: number } | null>(null);
-  const [chartTimeStrings, setChartTimeStrings] = useState<string[]>([]);
-
 
   useEffect(() => {
     setActiveThreats(displayedAlerts.filter(a => a.severity === "Critical" || a.severity === "High").length);
   }, [displayedAlerts]);
 
- useEffect(() => {
+  useEffect(() => {
     const fetchTraffic = async () => {
       if (!isLoadingTraffic) setIsLoadingTraffic(true);
 
@@ -156,16 +141,14 @@ export const DashboardPage: FC = () => {
         const result = await getPfSenseInterfaceStats(INTERFACE_TO_MONITOR);
         if (result.success && result.data) {
           setTrafficError(null);
-          const currentServerTime = new Date(); // Use a single Date object for this fetch
+          const currentServerTime = new Date();
           const currentTimestamp = currentServerTime.getTime();
           const { inbytes, outbytes } = result.data;
 
           let newTimeString = '';
-          // Defer toLocaleTimeString to client-side for chart label
           if (typeof window !== 'undefined') {
             newTimeString = currentServerTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
           }
-
 
           if (previousStatsRef.current) {
             const prev = previousStatsRef.current;
@@ -177,7 +160,7 @@ export const DashboardPage: FC = () => {
               
               setTrafficData(prevData => {
                 const newDataPoint = {
-                  time: newTimeString || prevData[prevData.length -1]?.time || '...', // use client-generated time string
+                  time: newTimeString || prevData[prevData.length -1]?.time || '...',
                   download: Math.max(0, downloadRateBytes / 1024),
                   upload: Math.max(0, uploadRateBytes / 1024),
                 };
@@ -202,7 +185,7 @@ export const DashboardPage: FC = () => {
     fetchTraffic();
     const intervalId = setInterval(fetchTraffic, TRAFFIC_FETCH_INTERVAL);
     return () => clearInterval(intervalId);
-  }, [isLoadingTraffic]); // Removed isLoadingTraffic from dependencies to avoid loop with setIsLoadingTraffic(true)
+  }, [isLoadingTraffic]);
 
   const handleVerbalNotificationToggle = (checked: boolean) => {
     setVerbalNotifications(checked);

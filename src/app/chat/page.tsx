@@ -1,6 +1,5 @@
-
 "use client";
-import type { FC } from 'react'; // Added FC for ClientTimeRenderer type
+import type { FC } from 'react';
 import { useState, useRef, useEffect, type FormEvent } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,22 +16,18 @@ interface Message {
   id: string;
   text: string;
   sender: 'user' | 'ai';
-  timestamp: string; // Changed to ISO string
+  timestamp: string;
 }
 
-// Client-side renderer for timestamps to avoid hydration issues
 const ClientTimeRenderer: FC<{ timestamp: string; formatter: (ts: string) => string | JSX.Element }> = ({ timestamp, formatter }) => {
   const [renderedTime, setRenderedTime] = useState<string | JSX.Element | null>(null);
 
   useEffect(() => {
-    // Ensure this runs only on the client
     setRenderedTime(formatter(timestamp));
   }, [timestamp, formatter]);
 
-  // Render a placeholder or basic format until client-side rendering kicks in
-  return <>{renderedTime || new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }</>;
+  return <>{renderedTime}</>;
 };
-
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -92,7 +87,7 @@ export default function ChatPage() {
       id: Date.now().toString(),
       text: currentInput,
       sender: 'user',
-      timestamp: new Date().toISOString(), // Use ISO string
+      timestamp: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
@@ -106,7 +101,7 @@ export default function ChatPage() {
         id: (Date.now() + 1).toString(),
         text: result.response,
         sender: 'ai',
-        timestamp: new Date().toISOString(), // Use ISO string
+        timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, aiMessage]);
       speak(result.response);
@@ -123,7 +118,7 @@ export default function ChatPage() {
         id: (Date.now() + 1).toString(),
         text: `Sorry, I encountered an error: ${errorMessage}`,
         sender: 'ai',
-        timestamp: new Date().toISOString(), // Use ISO string
+        timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, aiErrorMessage]);
     } finally {
